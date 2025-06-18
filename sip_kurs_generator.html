@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIP Kursbezeichnungs-Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the Inter font and overall body */
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Full viewport height */
+            margin: 0;
+            padding: 20px; /* Padding for mobile view */
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">SIP Kursbezeichnungs-Generator</h1>
+
+        <div class="mb-6">
+            <label for="kuerzelInput" class="block text-gray-700 text-sm font-semibold mb-2">Kürzel eingeben (mehrere mit Komma trennen, z.B. MUE,SCHM,MUST):</label>
+            <input type="text" id="kuerzelInput" placeholder="z.B. MUE, SCHM, MUST"
+                   class="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out">
+        </div>
+
+        <button id="generateAndDownloadButton"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200 ease-in-out transform hover:-translate-y-0.5">
+            Kurse generieren und als CSV-Datei herunterladen
+        </button>
+        
+        <div id="infoMessage" class="mt-8 mb-4 p-3 bg-blue-100 border border-blue-200 text-blue-800 rounded-lg text-sm">
+            <p class="font-semibold mb-1">Anleitung:</p>
+            <p>Geben Sie ein oder mehrere Kürzel (durch Kommas getrennt) ein. Nach dem Klick auf den Button wird eine einzige CSV-Datei generiert und heruntergeladen, die alle Kurse für die eingegebenen Kürzel enthält. Die Datei hat eine zusätzliche Spalte 'Kürzel' zur besseren Zuordnung.</p>
+        </div>
+
+        <div id="statusMessage" class="mt-4 p-3 text-center text-gray-600 hidden">
+            <!-- Status messages will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateAndDownloadButton = document.getElementById('generateAndDownloadButton');
+            const kuerzelInput = document.getElementById('kuerzelInput');
+            const infoMessage = document.getElementById('infoMessage');
+            const statusMessage = document.getElementById('statusMessage');
+
+            // Function to generate SIP courses based on the provided logic
+            function generateSipCourses(kuerzel) {
+                const days = [
+                    {key: 'Mo', name: 'Montag'},
+                    {key: 'Di', name: 'Dienstag'},
+                    {key: 'Mi', name: 'Mittwoch'},
+                    {key: 'Do', name: 'Donnerstag'},
+                    {key: 'Fr', name: 'Freitag'}
+                ];
+                const blocks = [1, 2, 3];
+
+                const sipCourses = [];
+
+                days.forEach(day => {
+                    blocks.forEach(block => {
+                        // 90min Kurs
+                        sipCourses.push({
+                            sipKursBezeichnung: `${day.key}-0${block}-${kuerzel}`,
+                            wochentag: day.name,
+                            block: block,
+                            typ: "90min"
+                        });
+
+                        // 45min Kurse
+                        sipCourses.push({
+                            sipKursBezeichnung: `${day.key}-${block}a-${kuerzel}`,
+                            wochentag: day.name,
+                            block: block,
+                            typ: "45min"
+                        });
+
+                        sipCourses.push({
+                            sipKursBezeichnung: `${day.key}-${block}b-${kuerzel}`,
+                            wochentag: day.name,
+                            block: block,
+                            typ: "45min"
+                        });
+                    });
+                });
+
+                // Sortieren nach Wochentag, dann Block, dann Typ
+                const dayOrder = {};
+                days.forEach((day, index) => {
+                    dayOrder[day.name] = index;
+                });
+
+                sipCourses.sort((a, b) => {
+                    // Sort by day of the week
+                    const dayComparison = dayOrder[a.wochentag] - dayOrder[b.wochentag];
+                    if (dayComparison !== 0) {
+                        return dayComparison;
+                    }
+                    // Then by block
+                    const blockComparison = a.block - b.block;
+                    if (blockComparison !== 0) {
+                        return blockComparison;
+                    }
+                    // Then by type (alphabetical, "45min" before "90min")
+                    return a.typ.localeCompare(b.typ);
+                });
+
+                return sipCourses;
+            }
+
+            // Function to combine all courses from all teachers into a single CSV string
+            function combineAllCoursesForSingleCsv(allCoursesData) {
+                if (allCoursesData.length === 0) return '';
+
+                let combinedCourses = [];
+                // Add a "Kuerzel" column to each course
+                allCoursesData.forEach(teacherData => {
+                    teacherData.courses.forEach(course => {
+                        combinedCourses.push({
+                            "Kürzel": teacherData.kuerzel, // Add the kuerzel as a new column
+                            ...course
+                        });
+                    });
+                });
+
+                // Get headers, ensuring "Kürzel" is the first
+                const originalHeaders = Object.keys(combinedCourses[0]).filter(header => header !== "Kürzel");
+                const headers = ["Kürzel", ...originalHeaders];
+                const headerRow = headers.join(';');
+
+                const rows = combinedCourses.map(row => {
+                    return headers.map(header => {
+                        let value = row[header];
+                        if (typeof value === 'string' && (value.includes(';') || value.includes('\n') || value.includes('"'))) {
+                            value = `"${value.replace(/"/g, '""')}"`;
+                        }
+                        return value;
+                    }).join(';');
+                });
+
+                return [headerRow, ...rows].join('\n');
+            }
+
+
+            // Function to trigger file download
+            function downloadFile(filename, content, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url); // Clean up the URL object
+            }
+
+            // Event listener for the generate and download button
+            generateAndDownloadButton.addEventListener('click', () => {
+                const kuerzelInputVal = kuerzelInput.value.trim();
+                if (kuerzelInputVal) {
+                    const kuerzelArray = kuerzelInputVal.split(',').map(k => k.trim().toUpperCase()).filter(k => k.length > 0);
+                    
+                    if (kuerzelArray.length === 0) {
+                        statusMessage.textContent = 'Bitte geben Sie mindestens ein gültiges Kürzel ein.';
+                        statusMessage.classList.remove('hidden');
+                        statusMessage.classList.remove('text-green-600');
+                        statusMessage.classList.add('text-red-600');
+                        return;
+                    }
+
+                    const allGeneratedCourses = kuerzelArray.map(kuerzel => ({
+                        kuerzel: kuerzel,
+                        courses: generateSipCourses(kuerzel)
+                    }));
+                    
+                    if (allGeneratedCourses.length > 0) {
+                        const combinedCsvContent = combineAllCoursesForSingleCsv(allGeneratedCourses);
+                        // Determine a suitable filename
+                        const filename = allGeneratedCourses.length === 1 ? 
+                                        `SIP-Kurse_${allGeneratedCourses[0].kuerzel}.csv` :
+                                        `SIP-Kurse_alle.csv`;
+                        downloadFile(filename, combinedCsvContent, 'text/csv;charset=utf-8;');
+                        statusMessage.textContent = `Die Datei "${filename}" wurde erfolgreich generiert und heruntergeladen.`;
+                        statusMessage.classList.remove('hidden');
+                        statusMessage.classList.remove('text-red-600');
+                        statusMessage.classList.add('text-green-600');
+                    } else {
+                        statusMessage.textContent = 'Es konnten keine Kurse generiert werden. Bitte überprüfen Sie Ihre Eingabe.';
+                        statusMessage.classList.remove('hidden');
+                        statusMessage.classList.remove('text-green-600');
+                        statusMessage.classList.add('text-red-600');
+                    }
+
+                } else {
+                    statusMessage.textContent = 'Bitte geben Sie ein oder mehrere Kürzel ein.';
+                    statusMessage.classList.remove('hidden');
+                    statusMessage.classList.remove('text-green-600');
+                    statusMessage.classList.add('text-red-600');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
