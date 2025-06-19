@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIP Kursbezeichnungsgenerator</title>
+    <title>Lektionseinheiten CSV Generator</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -19,26 +19,29 @@
             padding: 20px; /* Padding for mobile view */
             box-sizing: border-box;
         }
+        .form-input {
+            @apply shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
     <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">SIP Kursbezeichnungsgenerator</h1>
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Lektionseinheiten CSV Generator</h1>
 
         <div class="mb-6">
-            <label for="kuerzelInput" class="block text-gray-700 text-sm font-semibold mb-2">Kürzel eingeben (mehrere mit Komma trennen, z.B. MUE,SCHM,MUST):</label>
-            <input type="text" id="kuerzelInput" placeholder="z.B. MUE, SCHM, MUST"
-                   class="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out">
+            <label for="kuerzelInput" class="block text-gray-700 text-sm font-semibold mb-2">Kürzel der Lehrkraft eingeben (mehrere mit Komma trennen, z.B. MUE,SCHM,MUST):</label>
+            <input type="text" id="kuerzelInput" class="form-input" placeholder="z.B. MUE, SCHM, MUST">
         </div>
 
         <button id="generateAndDownloadButton"
                 class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200 ease-in-out transform hover:-translate-y-0.5">
-            Kurse generieren und als CSV-Datei herunterladen
+            Lektionseinheiten generieren und als CSV-Datei herunterladen
         </button>
         
         <div id="infoMessage" class="mt-8 mb-4 p-3 bg-blue-100 border border-blue-200 text-blue-800 rounded-lg text-sm">
             <p class="font-semibold mb-1">Anleitung:</p>
-            <p>Geben Sie ein oder mehrere Kürzel (durch Kommas getrennt) ein. Nach dem Klick auf den Button wird eine einzige CSV-Datei generiert und heruntergeladen, die alle Kurse für die eingegebenen Kürzel enthält. Die Datei hat eine zusätzliche Spalte 'Kürzel' zur besseren Zuordnung.</p>
+            <p>Geben Sie ein oder mehrere Kürzel (durch Kommas getrennt) ein. Nach dem Klick auf den Button wird eine einzige CSV-Datei generiert und heruntergeladen, die alle Lektionseinheiten für die eingegebenen Kürzel enthält. Die Datei hat eine zusätzliche Spalte 'Kürzel' zur besseren Zuordnung und 'Titel des Kurses' als Kursbezeichnung.</p>
+            <p class="mt-2 text-sm text-blue-700">**Hinweis:** Felder, die nicht definiert sind oder leer bleiben sollen, werden in der CSV-Datei mit einem "x" gekennzeichnet.</p>
         </div>
 
         <div id="statusMessage" class="mt-4 p-3 text-center text-gray-600 hidden">
@@ -50,11 +53,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             const generateAndDownloadButton = document.getElementById('generateAndDownloadButton');
             const kuerzelInput = document.getElementById('kuerzelInput');
-            const infoMessage = document.getElementById('infoMessage');
             const statusMessage = document.getElementById('statusMessage');
 
-            // Function to generate SIP courses based on the provided logic
-            function generateSipCourses(kuerzel) {
+            // Function to generate lesson units based on the given kuerzel and fixed parameters
+            function generateLessonUnits(kuerzel) {
                 const days = [
                     {key: 'Mo', name: 'Montag'},
                     {key: 'Di', name: 'Dienstag'},
@@ -63,85 +65,149 @@
                     {key: 'Fr', name: 'Freitag'}
                 ];
                 const blocks = [1, 2, 3];
+                const blockTimes = {
+                    1: { von: "07:30", bis: "10:00" },
+                    2: { von: "10:00", bis: "12:30" },
+                    3: { von: "12:30", bis: "16:00" }
+                };
 
-                const sipCourses = [];
+                const lessonUnits = [];
 
                 days.forEach(day => {
                     blocks.forEach(block => {
-                        // 90min Kurs
-                        sipCourses.push({
-                            sipKursBezeichnung: `${day.key}-0${block}-${kuerzel}`,
-                            wochentag: day.name,
-                            block: block,
-                            typ: "90min"
+                        // 90min course
+                        lessonUnits.push({
+                            // New "Titel des Kurses" column, based on previous SIP course naming
+                            "Titel des Kurses": `${day.key}-0${block}-${kuerzel}`,
+                            "Fach": "x", // Now 'x' if not defined
+                            "Facherweiterung": "x", // Now 'x' if not defined
+                            "Bilingual": "Nein", // fixed to Nein
+                            "Einzelunterricht": "Nein", // fixed to Nein
+                            "Stunden": 2, // 90min blocks are 2 hours
+                            "Dauer": 90, // 90 minutes
+                            "Von": blockTimes[block].von,
+                            "Bis": blockTimes[block].bis,
+                            "Freitext": "x", // Now 'x' if not defined
+                            "Schulart": "Gymnasium,Regionale Schule", // Changed from Realschule
+                            "Jahrgangsstufen": "7,8,9,10,11,12", // fixed
+                            "Unterrichtsarten": "x", // Now 'x' if not defined
+                            "ESF-Ergänzungsstd.": "x", // Now 'x' if not defined
+                            "ESF-Teilungsstd.": "x" // Now 'x' if not defined
                         });
 
-                        // 45min Kurse
-                        sipCourses.push({
-                            sipKursBezeichnung: `${day.key}-${block}a-${kuerzel}`,
-                            wochentag: day.name,
-                            block: block,
-                            typ: "45min"
+                        // 45min courses (a and b)
+                        lessonUnits.push({
+                            "Titel des Kurses": `${day.key}-${block}a-${kuerzel}`,
+                            "Fach": "x",
+                            "Facherweiterung": "x",
+                            "Bilingual": "Nein",
+                            "Einzelunterricht": "Nein",
+                            "Stunden": 1, // 45min blocks are 1 hour
+                            "Dauer": 45, // 45 minutes
+                            "Von": blockTimes[block].von,
+                            "Bis": blockTimes[block].bis,
+                            "Freitext": "x",
+                            "Schulart": "Gymnasium,Regionale Schule", // Changed from Realschule
+                            "Jahrgangsstufen": "7,8,9,10,11,12",
+                            "Unterrichtsarten": "x",
+                            "ESF-Ergänzungsstd.": "x",
+                            "ESF-Teilungsstd.": "x"
                         });
 
-                        sipCourses.push({
-                            sipKursBezeichnung: `${day.key}-${block}b-${kuerzel}`,
-                            wochentag: day.name,
-                            block: block,
-                            typ: "45min"
+                        lessonUnits.push({
+                            "Titel des Kurses": `${day.key}-${block}b-${kuerzel}`,
+                            "Fach": "x",
+                            "Facherweiterung": "x",
+                            "Bilingual": "Nein",
+                            "Einzelunterricht": "Nein",
+                            "Stunden": 1,
+                            "Dauer": 45,
+                            "Von": blockTimes[block].von,
+                            "Bis": blockTimes[block].bis,
+                            "Freitext": "x",
+                            "Schulart": "Gymnasium,Regionale Schule", // Changed from Realschule
+                            "Jahrgangsstufen": "7,8,9,10,11,12",
+                            "Unterrichtsarten": "x",
+                            "ESF-Ergänzungsstd.": "x",
+                            "ESF-Teilungsstd.": "x"
                         });
                     });
                 });
 
-                // Sortieren nach Wochentag, dann Block, dann Typ
+                // Sortieren nach Wochentag, dann Block
                 const dayOrder = {};
                 days.forEach((day, index) => {
                     dayOrder[day.name] = index;
                 });
 
-                sipCourses.sort((a, b) => {
-                    // Sort by day of the week
-                    const dayComparison = dayOrder[a.wochentag] - dayOrder[b.wochentag];
+                lessonUnits.sort((a, b) => {
+                    // Extract day key from "Titel des Kurses" (e.g., "Mo" from "Mo-01-MUE")
+                    const aDayKey = a["Titel des Kurses"].substring(0, 2);
+                    const bDayKey = b["Titel des Kurses"].substring(0, 2);
+
+                    const dayComparison = dayOrder[days.find(d => d.key === aDayKey).name] - dayOrder[days.find(d => d.key === bDayKey).name];
                     if (dayComparison !== 0) {
                         return dayComparison;
                     }
-                    // Then by block
-                    const blockComparison = a.block - b.block;
+
+                    // Extract block number (e.g., "01" or "1a" -> 1)
+                    const aBlockStr = a["Titel des Kurses"].substring(3, 4); // "0" or "1"
+                    const bBlockStr = b["Titel des Kurses"].substring(3, 4);
+                    const aBlock = parseInt(aBlockStr);
+                    const bBlock = parseInt(bBlockStr);
+
+                    const blockComparison = aBlock - bBlock;
                     if (blockComparison !== 0) {
                         return blockComparison;
                     }
-                    // Then by type (alphabetical, "45min" before "90min")
-                    return a.typ.localeCompare(b.typ);
+
+                    // Then by type (90min before 45min a, 45min a before 45min b)
+                    const aType = a["Titel des Kurses"].substring(a["Titel des Kurses"].indexOf('-') + 4, a["Titel des Kurses"].lastIndexOf('-'));
+                    const bType = b["Titel des Kurses"].substring(b["Titel des Kurses"].indexOf('-') + 4, b["Titel des Kurses"].lastIndexOf('-'));
+                    
+                    // Custom sort order for type: "0" (for 90min) < "a" < "b"
+                    const typeOrder = {"0": 0, "a": 1, "b": 2};
+                    return typeOrder[aType] - typeOrder[bType];
                 });
 
-                return sipCourses;
+                return lessonUnits;
             }
 
-            // Function to combine all courses from all teachers into a single CSV string
-            function combineAllCoursesForSingleCsv(allCoursesData) {
-                if (allCoursesData.length === 0) return '';
+            // Function to convert data to CSV string
+            function convertToCsv(data) {
+                if (data.length === 0) return '';
 
-                let combinedCourses = [];
-                // Add a "Kuerzel" column to each course
-                allCoursesData.forEach(teacherData => {
-                    teacherData.courses.forEach(course => {
-                        combinedCourses.push({
-                            "Kürzel": teacherData.kuerzel, // Add the kuerzel as a new column
-                            ...course
-                        });
-                    });
-                });
-
-                // Get headers, ensuring "Kürzel" is the first
-                const originalHeaders = Object.keys(combinedCourses[0]).filter(header => header !== "Kürzel");
-                const headers = ["Kürzel", ...originalHeaders];
-                const headerRow = headers.join(';');
-
-                const rows = combinedCourses.map(row => {
+                // Define the exact order of headers as per feedback
+                const headers = [
+                    { key: "Titel des Kurses", display: "Titel des Kurses" },
+                    { key: "Fach", display: "Fach" },
+                    { key: "Facherweiterung", display: "Facherweiterung" },
+                    { key: "Bilingual", display: "Bilingual" },
+                    { key: "Einzelunterricht", display: "Einzelunterricht" },
+                    { key: "Stunden", display: "Stunden" },
+                    { key: "Dauer", display: "Dauer" },
+                    { key: "Von", display: "Von" },
+                    { key: "Bis", display: "Bis" },
+                    { key: "Freitext", display: "Freitext" },
+                    { key: "Schulart", display: "Schulart" },
+                    { key: "Jahrgangsstufen", display: "Jahrgangsstufen" },
+                    { key: "Unterrichtsarten", display: "Unterrichtsarten" },
+                    { key: "ESF-Ergänzungsstd.", display: "ESF-Ergänzungsstd." },
+                    { key: "ESF-Teilungsstd.", display: "ESF-Teilungsstd." },
+                    { key: "Kürzel", display: "Kürzel" } // Add Kürzel at the end for combined CSV
+                ];
+                
+                const headerRow = headers.map(h => h.display).join(';');
+                
+                const rows = data.map(row => {
                     return headers.map(header => {
-                        let value = row[header];
-                        if (typeof value === 'string' && (value.includes(';') || value.includes('\n') || value.includes('"'))) {
-                            value = `"${value.replace(/"/g, '""')}"`;
+                        let value = row[header.key];
+                        // Ensure strings are handled for CSV
+                        value = String(value || ''); // Convert null/undefined to empty string
+
+                        // Escape values that contain semicolons, newlines, or double quotes
+                        if (value.includes(';') || value.includes('\n') || value.includes('"')) {
+                            value = `"${value.replace(/"/g, '""')}"`; // Double quotes and enclose
                         }
                         return value;
                     }).join(';');
@@ -149,7 +215,6 @@
 
                 return [headerRow, ...rows].join('\n');
             }
-
 
             // Function to trigger file download
             function downloadFile(filename, content, mimeType) {
@@ -178,24 +243,27 @@
                         return;
                     }
 
-                    const allGeneratedCourses = kuerzelArray.map(kuerzel => ({
-                        kuerzel: kuerzel,
-                        courses: generateSipCourses(kuerzel)
-                    }));
+                    let allCombinedLessonUnits = [];
+                    kuerzelArray.forEach(kuerzel => {
+                        const unitsForKuerzel = generateLessonUnits(kuerzel);
+                        unitsForKuerzel.forEach(unit => {
+                            // Add the kuerzel to each unit for the combined CSV
+                            unit["Kürzel"] = kuerzel; 
+                            allCombinedLessonUnits.push(unit);
+                        });
+                    });
                     
-                    if (allGeneratedCourses.length > 0) {
-                        const combinedCsvContent = combineAllCoursesForSingleCsv(allGeneratedCourses);
-                        // Determine a suitable filename
-                        const filename = allGeneratedCourses.length === 1 ? 
-                                        `SIP-Kurse_${allGeneratedCourses[0].kuerzel}.csv` :
-                                        `SIP-Kurse_alle.csv`;
-                        downloadFile(filename, combinedCsvContent, 'text/csv;charset=utf-8;');
-                        statusMessage.textContent = `Die Datei "${filename}" wurde erfolgreich generiert und heruntergeladen.`;
+                    if (allCombinedLessonUnits.length > 0) {
+                        const csvContent = convertToCsv(allCombinedLessonUnits);
+                        const filename = `Lektionseinheiten_alle_Kuerzel_${new Date().toISOString().split('T')[0]}.csv`; // Filename with date
+                        downloadFile(filename, csvContent, 'text/csv;charset=utf-8;');
+                        
+                        statusMessage.textContent = `Die Datei "${filename}" mit ${allCombinedLessonUnits.length} Lektionseinheiten wurde erfolgreich generiert und heruntergeladen.`;
                         statusMessage.classList.remove('hidden');
                         statusMessage.classList.remove('text-red-600');
                         statusMessage.classList.add('text-green-600');
                     } else {
-                        statusMessage.textContent = 'Es konnten keine Kurse generiert werden. Bitte überprüfen Sie Ihre Eingabe.';
+                        statusMessage.textContent = 'Es konnten keine Lektionseinheiten generiert werden. Bitte überprüfen Sie Ihre Eingabe.';
                         statusMessage.classList.remove('hidden');
                         statusMessage.classList.remove('text-green-600');
                         statusMessage.classList.add('text-red-600');
