@@ -41,7 +41,7 @@
         <div id="infoMessage" class="mt-8 mb-4 p-3 bg-blue-100 border border-blue-200 text-blue-800 rounded-lg text-sm">
             <p class="font-semibold mb-1">Anleitung:</p>
             <p>Geben Sie ein oder mehrere Kürzel (durch Kommas getrennt) ein. Nach dem Klick auf den Button wird eine einzige CSV-Datei generiert und heruntergeladen, die alle Lektionseinheiten für die eingegebenen Kürzel enthält. Die Datei hat eine zusätzliche Spalte 'Kürzel' zur besseren Zuordnung und 'Titel des Kurses' als Kursbezeichnung.</p>
-            <p class="mt-2 text-sm text-blue-700">**Hinweis:** Felder, die nicht definiert sind oder leer bleiben sollen, werden in der CSV-Datei mit einem "x" gekennzeichnet.</p>
+            <p class="mt-2 text-sm text-blue-700">**Hinweis:** Die Felder 'Von' und 'Bis' werden nicht in die CSV-Datei exportiert, da sie nur intern relevant sind. Andere Felder, die nicht definiert sind oder leer bleiben sollen, werden mit einem "x" gekennzeichnet.</p>
         </div>
 
         <div id="statusMessage" class="mt-4 p-3 text-center text-gray-600 hidden">
@@ -65,6 +65,7 @@
                     {key: 'Fr', name: 'Freitag'}
                 ];
                 const blocks = [1, 2, 3];
+                // Block times are still used internally for sorting, but not exported
                 const blockTimes = {
                     1: { von: "07:30", bis: "10:00" },
                     2: { von: "10:00", bis: "12:30" },
@@ -77,22 +78,21 @@
                     blocks.forEach(block => {
                         // 90min course
                         lessonUnits.push({
-                            // New "Titel des Kurses" column, based on previous SIP course naming
                             "Titel des Kurses": `${day.key}-0${block}-${kuerzel}`,
-                            "Fach": "x", // Now 'x' if not defined
-                            "Facherweiterung": "x", // Now 'x' if not defined
-                            "Bilingual": "Nein", // fixed to Nein
-                            "Einzelunterricht": "Nein", // fixed to Nein
+                            "Fach": "x",
+                            "Facherweiterung": "x",
+                            "Bilingual": "Nein",
+                            "Einzelunterricht": "Nein",
                             "Stunden": 2, // 90min blocks are 2 hours
-                            "Dauer": 90, // 90 minutes
-                            "Von": blockTimes[block].von,
-                            "Bis": blockTimes[block].bis,
-                            "Freitext": "x", // Now 'x' if not defined
-                            "Schulart": "Gymnasium,Regionale Schule", // Changed from Realschule
-                            "Jahrgangsstufen": "7,8,9,10,11,12", // fixed
-                            "Unterrichtsarten": "x", // Now 'x' if not defined
-                            "ESF-Ergänzungsstd.": "x", // Now 'x' if not defined
-                            "ESF-Teilungsstd.": "x" // Now 'x' if not defined
+                            "Dauer": 45, // Fixed duration to 45 minutes
+                            "Von": blockTimes[block].von, // Keep for internal sorting, but not exported
+                            "Bis": blockTimes[block].bis, // Keep for internal sorting, but not exported
+                            "Freitext": "x",
+                            "Schulart": "Gymnasium,Regionale Schule",
+                            "Jahrgangsstufen": "7,8,9,10,11,12",
+                            "Unterrichtsarten": "Pfl.", // Changed to Pfl.
+                            "ESF-Ergänzungsstd.": "x",
+                            "ESF-Teilungsstd.": "x"
                         });
 
                         // 45min courses (a and b)
@@ -103,13 +103,13 @@
                             "Bilingual": "Nein",
                             "Einzelunterricht": "Nein",
                             "Stunden": 1, // 45min blocks are 1 hour
-                            "Dauer": 45, // 45 minutes
+                            "Dauer": 45, // Fixed duration to 45 minutes
                             "Von": blockTimes[block].von,
                             "Bis": blockTimes[block].bis,
                             "Freitext": "x",
-                            "Schulart": "Gymnasium,Regionale Schule", // Changed from Realschule
+                            "Schulart": "Gymnasium,Regionale Schule",
                             "Jahrgangsstufen": "7,8,9,10,11,12",
-                            "Unterrichtsarten": "x",
+                            "Unterrichtsarten": "Pfl.", // Changed to Pfl.
                             "ESF-Ergänzungsstd.": "x",
                             "ESF-Teilungsstd.": "x"
                         });
@@ -121,20 +121,20 @@
                             "Bilingual": "Nein",
                             "Einzelunterricht": "Nein",
                             "Stunden": 1,
-                            "Dauer": 45,
+                            "Dauer": 45, // Fixed duration to 45 minutes
                             "Von": blockTimes[block].von,
                             "Bis": blockTimes[block].bis,
                             "Freitext": "x",
-                            "Schulart": "Gymnasium,Regionale Schule", // Changed from Realschule
+                            "Schulart": "Gymnasium,Regionale Schule",
                             "Jahrgangsstufen": "7,8,9,10,11,12",
-                            "Unterrichtsarten": "x",
+                            "Unterrichtsarten": "Pfl.", // Changed to Pfl.
                             "ESF-Ergänzungsstd.": "x",
                             "ESF-Teilungsstd.": "x"
                         });
                     });
                 });
 
-                // Sortieren nach Wochentag, dann Block
+                // Sortieren nach Wochentag, dann Block, dann Typ
                 const dayOrder = {};
                 days.forEach((day, index) => {
                     dayOrder[day.name] = index;
@@ -162,12 +162,22 @@
                     }
 
                     // Then by type (90min before 45min a, 45min a before 45min b)
-                    const aType = a["Titel des Kurses"].substring(a["Titel des Kurses"].indexOf('-') + 4, a["Titel des Kurses"].lastIndexOf('-'));
-                    const bType = b["Titel des Kurses"].substring(b["Titel des Kurses"].indexOf('-') + 4, b["Titel des Kurses"].lastIndexOf('-'));
+                    // This part needs to handle '0' for 90min courses correctly.
+                    const aTypeChar = a["Titel des Kurses"].substring(4, 5); // Char after block, e.g., 'a', 'b', or '-' for 90min course
+                    const bTypeChar = b["Titel des Kurses"].substring(4, 5);
+
+                    // Convert to a comparable value (e.g., for "Mo-01-MUE", it's '0'; for "Mo-1a-MUE", it's 'a')
+                    const getSortKey = (typeChar) => {
+                        if (typeChar === '-') return '0'; // For 90min courses (e.g., "Mo-01-MUE")
+                        return typeChar; // For 45min courses (e.g., 'a', 'b')
+                    };
+
+                    const aSortKey = getSortKey(aTypeChar);
+                    const bSortKey = getSortKey(bTypeChar);
                     
                     // Custom sort order for type: "0" (for 90min) < "a" < "b"
                     const typeOrder = {"0": 0, "a": 1, "b": 2};
-                    return typeOrder[aType] - typeOrder[bType];
+                    return typeOrder[aSortKey] - typeOrder[bSortKey];
                 });
 
                 return lessonUnits;
@@ -177,7 +187,7 @@
             function convertToCsv(data) {
                 if (data.length === 0) return '';
 
-                // Define the exact order of headers as per feedback
+                // Define the exact order of headers as per feedback, EXCLUDING "Von" and "Bis"
                 const headers = [
                     { key: "Titel des Kurses", display: "Titel des Kurses" },
                     { key: "Fach", display: "Fach" },
@@ -186,8 +196,7 @@
                     { key: "Einzelunterricht", display: "Einzelunterricht" },
                     { key: "Stunden", display: "Stunden" },
                     { key: "Dauer", display: "Dauer" },
-                    { key: "Von", display: "Von" },
-                    { key: "Bis", display: "Bis" },
+                    // "Von" and "Bis" are intentionally omitted here as per user feedback
                     { key: "Freitext", display: "Freitext" },
                     { key: "Schulart", display: "Schulart" },
                     { key: "Jahrgangsstufen", display: "Jahrgangsstufen" },
