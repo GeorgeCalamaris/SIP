@@ -3,288 +3,322 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lektionseinheiten CSV Generator</title>
+    <title>Erweiterter Kurs-Generator für SIP</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom styles for the Inter font and overall body */
+        /* Using Inter font as a base */
         body {
             font-family: "Inter", sans-serif;
-            background-color: #f3f4f6; /* Light gray background */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh; /* Full viewport height */
-            margin: 0;
-            padding: 20px; /* Padding for mobile view */
-            box-sizing: border-box;
+            /* A fresh, light gradient background */
+            background-color: #f8fafc; /* bg-slate-50 */
+            background-image: linear-gradient(to top right, #f8fafc, #e0f2fe); /* from-slate-50 to-sky-100 */
         }
         .form-input {
             @apply shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out;
         }
+        .subject-checkbox {
+            @apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500;
+        }
+        /* Teacher card with a softer look */
+        .teacher-card {
+            @apply bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-slate-200 transition-all duration-300 hover:shadow-xl;
+        }
+        /* Modal styles for a modern, rounded look */
+        .modal-backdrop {
+            @apply fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300;
+        }
+        .modal-content {
+            /* More rounded corners */
+            @apply bg-white rounded-2xl shadow-2xl p-8 m-4 max-w-2xl w-full transform transition-all duration-300 scale-95;
+        }
+        .modal-hidden {
+            @apply hidden;
+        }
+        .modal-backdrop.opacity-100 .modal-content {
+            @apply scale-100;
+        }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Lektionseinheiten CSV Generator</h1>
+<body class="py-10">
+    <div class="container mx-auto max-w-4xl px-4">
+        <h1 class="text-4xl font-bold text-center text-slate-800 mb-8">Erweiterter Kurs-Generator</h1>
 
-        <div class="mb-6">
-            <label for="kuerzelInput" class="block text-gray-700 text-sm font-semibold mb-2">Kürzel der Lehrkraft eingeben (mehrere mit Komma trennen, z.B. MUE,SCHM,MUST):</label>
-            <input type="text" id="kuerzelInput" class="form-input" placeholder="z.B. MUE, SCHM, MUST">
+        <div id="teacher-list" class="space-y-6">
+            <!-- Teacher input rows will be dynamically inserted here -->
         </div>
 
-        <button id="generateAndDownloadButton"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200 ease-in-out transform hover:-translate-y-0.5">
-            Lektionseinheiten generieren und als CSV-Datei herunterladen
-        </button>
+        <div class="mt-8">
+            <button id="add-teacher-btn" class="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-5 rounded-xl shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-all duration-200 ease-in-out transform hover:-translate-y-0.5">
+                + Weitere Lehrkraft hinzufügen
+            </button>
+        </div>
+
+        <div class="mt-12 border-t border-slate-200 pt-6">
+            <button id="generate-csv-btn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-all duration-200 ease-in-out transform hover:-translate-y-1">
+                CSV für alle Lehrkräfte generieren und herunterladen
+            </button>
+        </div>
         
-        <div id="infoMessage" class="mt-8 mb-4 p-3 bg-blue-100 border border-blue-200 text-blue-800 rounded-lg text-sm">
-            <p class="font-semibold mb-1">Anleitung:</p>
-            <p>Geben Sie ein oder mehrere Kürzel (durch Kommas getrennt) ein. Nach dem Klick auf den Button wird eine einzige CSV-Datei generiert und heruntergeladen, die alle Lektionseinheiten für die eingegebenen Kürzel enthält. Die Datei hat eine zusätzliche Spalte 'Kürzel' zur besseren Zuordnung und 'Titel des Kurses' als Kursbezeichnung.</p>
-            <p class="mt-2 text-sm text-blue-700">**Hinweis:** Die Felder 'Von' und 'Bis' werden nicht in die CSV-Datei exportiert, da sie nur intern relevant sind. Andere Felder, die nicht definiert sind oder leer bleiben sollen, werden mit einem "x" gekennzeichnet.</p>
-        </div>
+        <div id="statusMessage" class="mt-6 p-4 text-center rounded-xl hidden"></div>
+    </div>
 
-        <div id="statusMessage" class="mt-4 p-3 text-center text-gray-600 hidden">
-            <!-- Status messages will be displayed here -->
+    <!-- Template for a single teacher row -->
+    <template id="teacher-template">
+        <div class="teacher-card">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <div>
+                    <label class="block text-slate-700 text-sm font-semibold mb-2">Kürzel der Lehrkraft (3 Buchstaben):</label>
+                    <input type="text" class="form-input kuerzel-input bg-white/70" placeholder="z.B. HAK" maxlength="3">
+                </div>
+                <div>
+                    <label class="block text-slate-700 text-sm font-semibold mb-2">Ausgewählte Fächer:</label>
+                    <div class="p-3 bg-slate-100/80 border border-slate-200 rounded-lg min-h-[42px] selected-subjects-display">
+                        <span class="text-slate-500">Keine Fächer ausgewählt</span>
+                    </div>
+                    <button class="open-modal-btn mt-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-sm font-semibold py-2 px-4 rounded-lg w-full transition-colors">
+                        Fächer auswählen...
+                    </button>
+                    <input type="hidden" class="selected-subjects-input">
+                </div>
+            </div>
+            <div class="text-right mt-4 border-t border-slate-200/80 pt-4">
+                <button class="remove-teacher-btn bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-1 px-3 rounded-lg focus:outline-none transition-colors">
+                    Lehrkraft entfernen
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Modal for Subject Selection -->
+    <div id="subject-modal" class="modal-backdrop modal-hidden opacity-0">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6">Fächer auswählen</h2>
+            <div id="modal-subject-list" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+                <!-- Checkboxes will be populated by JS -->
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button id="modal-cancel-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-6 rounded-lg transition-colors">Abbrechen</button>
+                <button id="modal-save-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Speichern</button>
+            </div>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const generateAndDownloadButton = document.getElementById('generateAndDownloadButton');
-            const kuerzelInput = document.getElementById('kuerzelInput');
+            // --- DATA & CONFIGURATION ---
+            const subjects = {
+                'Deu': { name: 'Deutsch', minHours: 3, maxHours: 4 }, 'Eng': { name: 'Englisch', minHours: 3, maxHours: 4 },
+                'Mat': { name: 'Mathematik', minHours: 4, maxHours: 4 }, 'Fra': { name: 'Französisch', minHours: 3, maxHours: 4 },
+                'Phy': { name: 'Physik', minHours: 1, maxHours: 2 }, 'Ast': { name: 'Astronomie', minHours: 1, maxHours: 1 },
+                'Che': { name: 'Chemie', minHours: 1, maxHours: 2 }, 'Bio': { name: 'Biologie', minHours: 1, maxHours: 2 },
+                'Ges': { name: 'Geschichte', minHours: 1, maxHours: 2 }, 'Soz': { name: 'Sozialkunde', minHours: 1, maxHours: 1 },
+                'Rel': { name: 'Religion/Philo', minHours: 1, maxHours: 1 }
+            };
+            const days = [ {key: 'Mo'}, {key: 'Di'}, {key: 'Mi'}, {key: 'Do'}, {key: 'Fr'} ];
+            const bigBlocks = ['01', '02', '03'];
+            const smallBlocks = [ {key: '1', parts: ['a', 'b']}, {key: '2', parts: ['a', 'b']}, {key: '3', parts: ['a', 'b']} ];
+
+            // --- DOM ELEMENTS ---
+            const teacherList = document.getElementById('teacher-list');
+            const teacherTemplate = document.getElementById('teacher-template');
+            const addTeacherBtn = document.getElementById('add-teacher-btn');
+            const generateCsvBtn = document.getElementById('generate-csv-btn');
             const statusMessage = document.getElementById('statusMessage');
+            const modal = document.getElementById('subject-modal');
+            const modalSubjectList = document.getElementById('modal-subject-list');
+            const modalSaveBtn = document.getElementById('modal-save-btn');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
-            // Function to generate lesson units based on the given kuerzel and fixed parameters
-            function generateLessonUnits(kuerzel) {
-                const days = [
-                    {key: 'Mo', name: 'Montag'},
-                    {key: 'Di', name: 'Dienstag'},
-                    {key: 'Mi', name: 'Mittwoch'},
-                    {key: 'Do', name: 'Donnerstag'},
-                    {key: 'Fr', name: 'Freitag'}
-                ];
-                const blocks = [1, 2, 3];
-                // Block times are still used internally for sorting, but not exported
-                const blockTimes = {
-                    1: { von: "07:30", bis: "10:00" },
-                    2: { von: "10:00", bis: "12:30" },
-                    3: { von: "12:30", bis: "16:00" }
-                };
+            let activeTeacherCard = null;
 
-                const lessonUnits = [];
+            // --- FUNCTIONS ---
+            const openModal = (teacherCard) => {
+                activeTeacherCard = teacherCard;
+                const selectedSubjectsInput = activeTeacherCard.querySelector('.selected-subjects-input');
+                const currentSelection = selectedSubjectsInput.value ? selectedSubjectsInput.value.split(',') : [];
+                
+                modalSubjectList.innerHTML = ''; // Clear previous content
+                for (const [acronym, subject] of Object.entries(subjects)) {
+                    const isChecked = currentSelection.includes(acronym);
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center';
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.id = `modal-subject-${acronym}`;
+                    input.value = acronym;
+                    input.className = 'subject-checkbox';
+                    input.checked = isChecked;
+                    
+                    const label = document.createElement('label');
+                    label.htmlFor = input.id;
+                    label.textContent = `${subject.name} (${acronym})`;
+                    label.className = 'ml-2 text-sm text-slate-700 select-none cursor-pointer';
 
-                days.forEach(day => {
-                    blocks.forEach(block => {
-                        // 90min course
-                        lessonUnits.push({
-                            "Titel des Kurses": `${day.key}-0${block}-${kuerzel}`,
-                            "Fach": "x",
-                            "Facherweiterung": "x",
-                            "Bilingual": "Nein",
-                            "Einzelunterricht": "Nein",
-                            "Stunden": 2, // 90min blocks are 2 hours
-                            "Dauer": 45, // Fixed duration to 45 minutes
-                            "Von": blockTimes[block].von, // Keep for internal sorting, but not exported
-                            "Bis": blockTimes[block].bis, // Keep for internal sorting, but not exported
-                            "Freitext": "x",
-                            "Schulart": "Gymnasium,Regionale Schule",
-                            "Jahrgangsstufen": "7,8,9,10,11,12",
-                            "Unterrichtsarten": "Pfl.", // Changed to Pfl.
-                            "ESF-Ergänzungsstd.": "x",
-                            "ESF-Teilungsstd.": "x"
-                        });
+                    div.appendChild(input);
+                    div.appendChild(label);
+                    modalSubjectList.appendChild(div);
+                }
 
-                        // 45min courses (a and b)
-                        lessonUnits.push({
-                            "Titel des Kurses": `${day.key}-${block}a-${kuerzel}`,
-                            "Fach": "x",
-                            "Facherweiterung": "x",
-                            "Bilingual": "Nein",
-                            "Einzelunterricht": "Nein",
-                            "Stunden": 1, // 45min blocks are 1 hour
-                            "Dauer": 45, // Fixed duration to 45 minutes
-                            "Von": blockTimes[block].von,
-                            "Bis": blockTimes[block].bis,
-                            "Freitext": "x",
-                            "Schulart": "Gymnasium,Regionale Schule",
-                            "Jahrgangsstufen": "7,8,9,10,11,12",
-                            "Unterrichtsarten": "Pfl.", // Changed to Pfl.
-                            "ESF-Ergänzungsstd.": "x",
-                            "ESF-Teilungsstd.": "x"
-                        });
+                modal.classList.remove('modal-hidden');
+                setTimeout(() => {
+                    modal.classList.add('opacity-100');
+                }, 10);
+            };
 
-                        lessonUnits.push({
-                            "Titel des Kurses": `${day.key}-${block}b-${kuerzel}`,
-                            "Fach": "x",
-                            "Facherweiterung": "x",
-                            "Bilingual": "Nein",
-                            "Einzelunterricht": "Nein",
-                            "Stunden": 1,
-                            "Dauer": 45, // Fixed duration to 45 minutes
-                            "Von": blockTimes[block].von,
-                            "Bis": blockTimes[block].bis,
-                            "Freitext": "x",
-                            "Schulart": "Gymnasium,Regionale Schule",
-                            "Jahrgangsstufen": "7,8,9,10,11,12",
-                            "Unterrichtsarten": "Pfl.", // Changed to Pfl.
-                            "ESF-Ergänzungsstd.": "x",
-                            "ESF-Teilungsstd.": "x"
-                        });
+            const closeModal = () => {
+                modal.classList.remove('opacity-100');
+                setTimeout(() => {
+                    modal.classList.add('modal-hidden');
+                    activeTeacherCard = null;
+                }, 300);
+            };
+
+            const addTeacherRow = () => {
+                const newTeacherRow = teacherTemplate.content.cloneNode(true);
+                const card = newTeacherRow.querySelector('.teacher-card');
+                
+                newTeacherRow.querySelector('.open-modal-btn').addEventListener('click', () => openModal(card));
+                newTeacherRow.querySelector('.remove-teacher-btn').addEventListener('click', (e) => e.target.closest('.teacher-card').remove());
+
+                teacherList.appendChild(newTeacherRow);
+            };
+
+            const generateAllLessonUnits = () => {
+                const allUnits = [];
+                const teacherRows = teacherList.querySelectorAll('.teacher-card');
+                let hasError = false;
+
+                teacherRows.forEach((row, index) => {
+                    const kuerzelInput = row.querySelector('.kuerzel-input');
+                    const kuerzel = kuerzelInput.value.trim().toUpperCase();
+                    
+                    if (kuerzel.length !== 3) {
+                        kuerzelInput.classList.add('border-red-500', 'focus:ring-red-500');
+                        statusMessage.textContent = `Fehler: Kürzel in Zeile ${index + 1} muss genau 3 Buchstaben haben.`;
+                        hasError = true; return;
+                    } else {
+                        kuerzelInput.classList.remove('border-red-500', 'focus:ring-red-500');
+                    }
+
+                    const selectedSubjects = row.querySelector('.selected-subjects-input').value.split(',').filter(s => s);
+                    if (selectedSubjects.length === 0) {
+                        statusMessage.textContent = `Fehler: Für Kürzel "${kuerzel}" wurden keine Fächer ausgewählt.`;
+                        hasError = true; return;
+                    }
+
+                    selectedSubjects.forEach(subjectAcronym => {
+                        const subjectData = subjects[subjectAcronym];
+                        if (subjectData.maxHours >= 2) {
+                            days.forEach(day => bigBlocks.forEach(block => {
+                                const kurzbezeichnung = `${kuerzel}${day.key}${block}-${subjectAcronym}`;
+                                allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 2));
+                            }));
+                        }
+                        if (subjectData.minHours === 1) {
+                            days.forEach(day => smallBlocks.forEach(block => block.parts.forEach(part => {
+                                const kurzbezeichnung = `${kuerzel}${day.key}${block.key}${part}-${subjectAcronym}`;
+                                allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 1));
+                            })));
+                        }
                     });
                 });
+                
+                if (hasError) {
+                    statusMessage.classList.remove('hidden', 'bg-green-100', 'text-green-800');
+                    statusMessage.classList.add('bg-red-100', 'text-red-800');
+                    return null;
+                }
+                return allUnits;
+            };
 
-                // Sortieren nach Wochentag, dann Block, dann Typ
-                const dayOrder = {};
-                days.forEach((day, index) => {
-                    dayOrder[day.name] = index;
-                });
+            const createUnit = (kurzbezeichnung, subjectAcronym, stunden) => {
+                return {
+                    "Freitext": kurzbezeichnung, "Fach": subjectAcronym, "Facherweiterung": "x",
+                    "Bilingual": "Nein", "Einzelunterricht": "Nein", "Stunden": stunden,
+                    "Dauer": stunden === 2 ? 90 : 45,
+                    "Schulart": "Gymnasium,Regionale Schule", "Jahrgangsstufen": "7,8,9,10,11,12",
+                    "Unterrichtsarten": "Pfl.", "ESF-Ergänzungsstd.": "x", "ESF-Teilungsstd.": "x"
+                };
+            };
 
-                lessonUnits.sort((a, b) => {
-                    // Extract day key from "Titel des Kurses" (e.g., "Mo" from "Mo-01-MUE")
-                    const aDayKey = a["Titel des Kurses"].substring(0, 2);
-                    const bDayKey = b["Titel des Kurses"].substring(0, 2);
-
-                    const dayComparison = dayOrder[days.find(d => d.key === aDayKey).name] - dayOrder[days.find(d => d.key === bDayKey).name];
-                    if (dayComparison !== 0) {
-                        return dayComparison;
-                    }
-
-                    // Extract block number (e.g., "01" or "1a" -> 1)
-                    const aBlockStr = a["Titel des Kurses"].substring(3, 4); // "0" or "1"
-                    const bBlockStr = b["Titel des Kurses"].substring(3, 4);
-                    const aBlock = parseInt(aBlockStr);
-                    const bBlock = parseInt(bBlockStr);
-
-                    const blockComparison = aBlock - bBlock;
-                    if (blockComparison !== 0) {
-                        return blockComparison;
-                    }
-
-                    // Then by type (90min before 45min a, 45min a before 45min b)
-                    // This part needs to handle '0' for 90min courses correctly.
-                    const aTypeChar = a["Titel des Kurses"].substring(4, 5); // Char after block, e.g., 'a', 'b', or '-' for 90min course
-                    const bTypeChar = b["Titel des Kurses"].substring(4, 5);
-
-                    // Convert to a comparable value (e.g., for "Mo-01-MUE", it's '0'; for "Mo-1a-MUE", it's 'a')
-                    const getSortKey = (typeChar) => {
-                        if (typeChar === '-') return '0'; // For 90min courses (e.g., "Mo-01-MUE")
-                        return typeChar; // For 45min courses (e.g., 'a', 'b')
-                    };
-
-                    const aSortKey = getSortKey(aTypeChar);
-                    const bSortKey = getSortKey(bTypeChar);
-                    
-                    // Custom sort order for type: "0" (for 90min) < "a" < "b"
-                    const typeOrder = {"0": 0, "a": 1, "b": 2};
-                    return typeOrder[aSortKey] - typeOrder[bSortKey];
-                });
-
-                return lessonUnits;
-            }
-
-            // Function to convert data to CSV string
-            function convertToCsv(data) {
+            const convertToCsv = (data) => {
                 if (data.length === 0) return '';
-
-                // Define the exact order of headers as per feedback, EXCLUDING "Von" and "Bis"
-                const headers = [
-                    { key: "Titel des Kurses", display: "Titel des Kurses" },
-                    { key: "Fach", display: "Fach" },
-                    { key: "Facherweiterung", display: "Facherweiterung" },
-                    { key: "Bilingual", display: "Bilingual" },
-                    { key: "Einzelunterricht", display: "Einzelunterricht" },
-                    { key: "Stunden", display: "Stunden" },
-                    { key: "Dauer", display: "Dauer" },
-                    // "Von" and "Bis" are intentionally omitted here as per user feedback
-                    { key: "Freitext", display: "Freitext" },
-                    { key: "Schulart", display: "Schulart" },
-                    { key: "Jahrgangsstufen", display: "Jahrgangsstufen" },
-                    { key: "Unterrichtsarten", display: "Unterrichtsarten" },
-                    { key: "ESF-Ergänzungsstd.", display: "ESF-Ergänzungsstd." },
-                    { key: "ESF-Teilungsstd.", display: "ESF-Teilungsstd." },
-                    { key: "Kürzel", display: "Kürzel" } // Add Kürzel at the end for combined CSV
-                ];
-                
-                const headerRow = headers.map(h => h.display).join(';');
-                
-                const rows = data.map(row => {
-                    return headers.map(header => {
-                        let value = row[header.key];
-                        // Ensure strings are handled for CSV
-                        value = String(value || ''); // Convert null/undefined to empty string
-
-                        // Escape values that contain semicolons, newlines, or double quotes
-                        if (value.includes(';') || value.includes('\n') || value.includes('"')) {
-                            value = `"${value.replace(/"/g, '""')}"`; // Double quotes and enclose
-                        }
-                        return value;
-                    }).join(';');
-                });
-
+                const headers = ["Fach", "Facherweiterung", "Bilingual", "Einzelunterricht", "Stunden", "Dauer", "Freitext", "Schulart", "Jahrgangsstufen", "Unterrichtsarten", "ESF-Ergänzungsstd.", "ESF-Teilungsstd."];
+                const headerRow = headers.join(';');
+                const rows = data.map(row => headers.map(header => {
+                    let value = String(row[header] || '');
+                    if (value.includes(';') || value.includes('\n') || value.includes('"')) {
+                        value = `"${value.replace(/"/g, '""')}"`;
+                    }
+                    return value;
+                }).join(';'));
                 return [headerRow, ...rows].join('\n');
-            }
+            };
 
-            // Function to trigger file download
-            function downloadFile(filename, content, mimeType) {
-                const blob = new Blob([content], { type: mimeType });
+            const downloadFile = (filename, content) => {
+                const blob = new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url); // Clean up the URL object
-            }
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+            };
 
-            // Event listener for the generate and download button
-            generateAndDownloadButton.addEventListener('click', () => {
-                const kuerzelInputVal = kuerzelInput.value.trim();
-                if (kuerzelInputVal) {
-                    const kuerzelArray = kuerzelInputVal.split(',').map(k => k.trim().toUpperCase()).filter(k => k.length > 0);
-                    
-                    if (kuerzelArray.length === 0) {
-                        statusMessage.textContent = 'Bitte geben Sie mindestens ein gültiges Kürzel ein.';
-                        statusMessage.classList.remove('hidden');
-                        statusMessage.classList.remove('text-green-600');
-                        statusMessage.classList.add('text-red-600');
-                        return;
-                    }
-
-                    let allCombinedLessonUnits = [];
-                    kuerzelArray.forEach(kuerzel => {
-                        const unitsForKuerzel = generateLessonUnits(kuerzel);
-                        unitsForKuerzel.forEach(unit => {
-                            // Add the kuerzel to each unit for the combined CSV
-                            unit["Kürzel"] = kuerzel; 
-                            allCombinedLessonUnits.push(unit);
-                        });
+            // --- EVENT LISTENERS ---
+            addTeacherBtn.addEventListener('click', addTeacherRow);
+            
+            modalSaveBtn.addEventListener('click', () => {
+                if (!activeTeacherCard) return;
+                const selectedCheckboxes = Array.from(modalSubjectList.querySelectorAll('.subject-checkbox:checked'));
+                const selectedAcronyms = selectedCheckboxes.map(cb => cb.value);
+                
+                activeTeacherCard.querySelector('.selected-subjects-input').value = selectedAcronyms.join(',');
+                
+                const displayDiv = activeTeacherCard.querySelector('.selected-subjects-display');
+                if (selectedAcronyms.length > 0) {
+                    displayDiv.innerHTML = '';
+                    selectedAcronyms.forEach(acronym => {
+                        const badge = document.createElement('span');
+                        badge.className = 'inline-block bg-blue-100 text-blue-800 text-sm font-semibold mr-2 mb-2 px-2.5 py-0.5 rounded-full';
+                        badge.textContent = acronym;
+                        displayDiv.appendChild(badge);
                     });
-                    
-                    if (allCombinedLessonUnits.length > 0) {
-                        const csvContent = convertToCsv(allCombinedLessonUnits);
-                        const filename = `Lektionseinheiten_alle_Kuerzel_${new Date().toISOString().split('T')[0]}.csv`; // Filename with date
-                        downloadFile(filename, csvContent, 'text/csv;charset=utf-8;');
-                        
-                        statusMessage.textContent = `Die Datei "${filename}" mit ${allCombinedLessonUnits.length} Lektionseinheiten wurde erfolgreich generiert und heruntergeladen.`;
-                        statusMessage.classList.remove('hidden');
-                        statusMessage.classList.remove('text-red-600');
-                        statusMessage.classList.add('text-green-600');
-                    } else {
-                        statusMessage.textContent = 'Es konnten keine Lektionseinheiten generiert werden. Bitte überprüfen Sie Ihre Eingabe.';
-                        statusMessage.classList.remove('hidden');
-                        statusMessage.classList.remove('text-green-600');
-                        statusMessage.classList.add('text-red-600');
-                    }
-
                 } else {
-                    statusMessage.textContent = 'Bitte geben Sie ein oder mehrere Kürzel ein.';
-                    statusMessage.classList.remove('hidden');
-                    statusMessage.classList.remove('text-green-600');
-                    statusMessage.classList.add('text-red-600');
+                    displayDiv.innerHTML = '<span class="text-slate-500">Keine Fächer ausgewählt</span>';
+                }
+                closeModal();
+            });
+
+            modalCancelBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+            generateCsvBtn.addEventListener('click', () => {
+                statusMessage.classList.add('hidden'); statusMessage.textContent = '';
+                if (teacherList.children.length === 0) {
+                     statusMessage.textContent = 'Bitte fügen Sie mindestens eine Lehrkraft hinzu.';
+                     statusMessage.classList.remove('hidden');
+                     statusMessage.classList.add('bg-red-100', 'text-red-800');
+                     return;
+                }
+                const allLessonUnits = generateAllLessonUnits();
+                if (allLessonUnits && allLessonUnits.length > 0) {
+                    const csvContent = convertToCsv(allLessonUnits);
+                    const filename = `Kurse_generiert_${new Date().toISOString().split('T')[0]}.csv`;
+                    downloadFile(filename, csvContent);
+                    statusMessage.textContent = `Erfolg! Die Datei "${filename}" mit ${allLessonUnits.length} Kursen wurde generiert.`;
+                    statusMessage.classList.remove('hidden', 'bg-red-100', 'text-red-800');
+                    statusMessage.classList.add('bg-green-100', 'text-green-800');
+                } else if (allLessonUnits) {
+                    statusMessage.textContent = 'Es wurden keine Kurse generiert. Bitte überprüfen Sie Ihre Eingabe.';
+                    statusMessage.classList.remove('hidden', 'bg-green-100', 'text-green-800');
+                    statusMessage.classList.add('bg-red-100', 'text-red-800');
                 }
             });
+
+            // --- INITIALIZATION ---
+            addTeacherRow();
         });
     </script>
 </body>
