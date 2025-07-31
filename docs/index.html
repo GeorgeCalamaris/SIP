@@ -13,6 +13,9 @@
             /* A fresh, light gradient background */
             background-color: #f8fafc; /* bg-slate-50 */
             background-image: linear-gradient(to top right, #f8fafc, #e0f2fe); /* from-slate-50 to-sky-100 */
+            margin: 0;
+            padding: 20px; /* Padding for mobile view */
+            box-sizing: border-box;
         }
         .form-input {
             @apply shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out;
@@ -24,19 +27,35 @@
         .teacher-card {
             @apply bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-slate-200 transition-all duration-300 hover:shadow-xl;
         }
-        /* Modal styles for a modern, rounded look */
+        /* Modal styles - copied from simple-working-modal for reliability */
         .modal-backdrop {
-            @apply fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300;
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 150;
+            inset: 0; /* top, right, bottom, left to 0 */
+            background-color: rgba(0,0,0,0.5); /* Semi-transparent black backdrop */
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease-in-out; /* Smooth transition for opacity */
+            opacity: 0; /* Start hidden for transition */
+        }
+        .modal-backdrop.active {
+            display: flex; /* Show when active */
+            opacity: 1; /* Fade in */
         }
         .modal-content {
-            /* More rounded corners */
-            @apply bg-white rounded-2xl shadow-2xl p-8 m-4 max-w-2xl w-full transform transition-all duration-300 scale-95;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem; /* rounded-xl from Tailwind */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* shadow-2xl from Tailwind */
+            max-width: 32rem; /* max-w-lg from Tailwind */
+            width: 100%;
+            margin: 1rem; /* m-4 from Tailwind */
+            transform: scale(0.95); /* Start slightly smaller for transition */
+            transition: transform 0.3s ease-in-out; /* Smooth transition for scale */
         }
-        .modal-hidden {
-            @apply hidden;
-        }
-        .modal-backdrop.opacity-100 .modal-content {
-            @apply scale-100;
+        .modal-backdrop.active .modal-content {
+            transform: scale(1); /* Scale to full size when active */
         }
         .error-message {
             @apply text-red-600 text-sm mt-2;
@@ -92,7 +111,7 @@
     </template>
 
     <!-- Modal for Subject Selection and Kuerzel Input -->
-    <div id="subject-modal" class="modal-backdrop modal-hidden opacity-0">
+    <div id="subject-modal" class="modal-backdrop">
         <div class="modal-content">
             <h2 class="text-2xl font-bold text-slate-800 mb-6">Lehrkraft hinzufügen & Fächer auswählen</h2>
             
@@ -131,7 +150,7 @@
                 'Ge': { name: 'Geschichte', canBeOneHour: false }, 
                 'Phil': { name: 'Philosophie', canBeOneHour: true }, // Can be 1-hour
                 'Ph': { name: 'Physik', canBeOneHour: false },
-                'Span': { name: 'Spanisch', canBeOneHour: false }, 
+                'Span': { name: 'Spanisch', canBeOneHour: true }, // Spanisch can be 1-hour
                 'Fr': { name: 'Französisch', canBeOneHour: false }
             };
             const days = [ {key: 'Mo'}, {key: 'Di'}, {key: 'Mi'}, {key: 'Do'}, {key: 'Fr'} ];
@@ -154,6 +173,10 @@
 
             // --- FUNCTIONS ---
             const openModal = () => {
+                // Clear any previous status messages before opening modal
+                statusMessage.classList.add('hidden');
+                statusMessage.textContent = '';
+
                 // Reset modal inputs and errors
                 modalKuerzelInput.value = '';
                 modalKuerzelError.classList.add('hidden');
@@ -179,18 +202,16 @@
                     modalSubjectList.appendChild(div);
                 }
 
-                modal.classList.remove('modal-hidden');
+                // Add 'active' class to show modal
+                modal.classList.add('active'); 
                 setTimeout(() => {
-                    modal.classList.add('opacity-100');
                     modalKuerzelInput.focus(); // Focus on kuerzel input
                 }, 10);
             };
 
             const closeModal = () => {
-                modal.classList.remove('opacity-100');
-                setTimeout(() => {
-                    modal.classList.add('modal-hidden');
-                }, 300);
+                // Remove 'active' class to hide modal
+                modal.classList.remove('active'); 
             };
 
             const createTeacherDisplayCard = (kuerzel, selectedAcronyms) => {
@@ -244,16 +265,22 @@
                     selectedSubjects.forEach(subjectAcronym => {
                         const subjectData = subjects[subjectAcronym];
 
+                        // Determine the subject abbreviation to use in the course title (potentially shortened)
+                        let subjectAcronymForTitle = subjectAcronym;
+                        if (subjectAcronym.length === 4) { // Check if it's a 4-letter abbreviation
+                            subjectAcronymForTitle = subjectAcronym.substring(0, 3); // Shorten to 3 letters
+                        }
+
                         // Generate 90-minute courses (2 Stunden) for all selected subjects
                         days.forEach(day => bigBlocks.forEach(block => {
-                            const kurzbezeichnung = `${kuerzel}${day.key}${block}${subjectAcronym}`;
+                            const kurzbezeichnung = `${kuerzel}${day.key}${block}${subjectAcronymForTitle}`;
                             allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 2));
                         }));
                         
                         // Generate 45-minute courses (1 Stunde) ONLY if subject can be 1-hour
                         if (subjectData.canBeOneHour) {
                             days.forEach(day => smallBlocks.forEach(block => block.parts.forEach(part => {
-                                const kurzbezeichnung = `${kuerzel}${day.key}${block.key}${part}${subjectAcronym}`;
+                                const kurzbezeichnung = `${kuerzel}${day.key}${block.key}${part}${subjectAcronymForTitle}`;
                                 allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 1));
                             })));
                         }
@@ -270,13 +297,13 @@
 
             const createUnit = (kurzbezeichnung, subjectAcronym, stunden) => {
                 return {
-                    "Fach": subjectAcronym, // Fachkürzel des Faches
+                    "Fach": subjectAcronym, // Fachkürzel des Faches (full length)
                     "Facherweiterung": 0, // Immer 0
                     "Bilingual": 0, // Immer 0
                     "Einzelunterricht": 0, // Immer 0
                     "Stunden": stunden, // 2 für 90min Blöcke, 1 für 45min Blöcke
                     "Dauer": 45, // Immer 45 Minuten
-                    "Freitext": kurzbezeichnung, // Der generierte Titel des Kurses
+                    "Freitext": kurzbezeichnung, // Der generierte Titel des Kurses (max 10 chars)
                     "Schulart": "Gy,RegS", // Abkürzungen
                     "Jahrgangsstufen": "7,8,9,10,11,12", // Feste Werte
                     "Unterrichtsarten": "Pfl", // Abkürzung
