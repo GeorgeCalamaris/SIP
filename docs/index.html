@@ -38,6 +38,9 @@
         .modal-backdrop.opacity-100 .modal-content {
             @apply scale-100;
         }
+        .error-message {
+            @apply text-red-600 text-sm mt-2;
+        }
     </style>
 </head>
 <body class="py-10">
@@ -64,22 +67,19 @@
         <div id="statusMessage" class="mt-6 p-4 text-center rounded-xl hidden"></div>
     </div>
 
-    <!-- Template for a single teacher row -->
+    <!-- Template for a single teacher card display -->
     <template id="teacher-template">
         <div class="teacher-card">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <div>
                     <label class="block text-slate-700 text-sm font-semibold mb-2">Kürzel der Lehrkraft (3 Buchstaben):</label>
-                    <input type="text" class="form-input kuerzel-input bg-white/70" placeholder="z.B. HAK" maxlength="3">
+                    <input type="text" class="form-input kuerzel-input bg-white/70" placeholder="z.B. HAK" maxlength="3" readonly>
                 </div>
                 <div>
                     <label class="block text-slate-700 text-sm font-semibold mb-2">Ausgewählte Fächer:</label>
                     <div class="p-3 bg-slate-100/80 border border-slate-200 rounded-lg min-h-[42px] selected-subjects-display">
                         <span class="text-slate-500">Keine Fächer ausgewählt</span>
                     </div>
-                    <button class="open-modal-btn mt-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-sm font-semibold py-2 px-4 rounded-lg w-full transition-colors">
-                        Fächer auswählen...
-                    </button>
                     <input type="hidden" class="selected-subjects-input">
                 </div>
             </div>
@@ -91,13 +91,25 @@
         </div>
     </template>
 
-    <!-- Modal for Subject Selection -->
+    <!-- Modal for Subject Selection and Kuerzel Input -->
     <div id="subject-modal" class="modal-backdrop modal-hidden opacity-0">
         <div class="modal-content">
-            <h2 class="text-2xl font-bold text-slate-800 mb-6">Fächer auswählen</h2>
-            <div id="modal-subject-list" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
-                <!-- Checkboxes will be populated by JS -->
+            <h2 class="text-2xl font-bold text-slate-800 mb-6">Lehrkraft hinzufügen & Fächer auswählen</h2>
+            
+            <div class="mb-4">
+                <label for="modal-kuerzel-input" class="block text-slate-700 text-sm font-semibold mb-2">Kürzel der Lehrkraft (3 Buchstaben):</label>
+                <input type="text" id="modal-kuerzel-input" class="form-input" placeholder="z.B. HAK" maxlength="3">
+                <p id="modal-kuerzel-error" class="error-message hidden">Das Kürzel muss genau 3 Buchstaben haben.</p>
             </div>
+
+            <div class="mb-8">
+                <label class="block text-slate-700 text-sm font-semibold mb-2">Fächer auswählen:</label>
+                <div id="modal-subject-list" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <!-- Checkboxes will be populated by JS -->
+                </div>
+                <p id="modal-subjects-error" class="error-message hidden">Bitte wählen Sie mindestens ein Fach aus.</p>
+            </div>
+
             <div class="flex justify-end space-x-4">
                 <button id="modal-cancel-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-6 rounded-lg transition-colors">Abbrechen</button>
                 <button id="modal-save-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Speichern</button>
@@ -108,17 +120,23 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- DATA & CONFIGURATION ---
+            // Map of subject names to their abbreviations and if they can be 1-hour courses
             const subjects = {
-                'Deu': { name: 'Deutsch', minHours: 3, maxHours: 4 }, 'Eng': { name: 'Englisch', minHours: 3, maxHours: 4 },
-                'Mat': { name: 'Mathematik', minHours: 4, maxHours: 4 }, 'Fra': { name: 'Französisch', minHours: 3, maxHours: 4 },
-                'Phy': { name: 'Physik', minHours: 1, maxHours: 2 }, 'Ast': { name: 'Astronomie', minHours: 1, maxHours: 1 },
-                'Che': { name: 'Chemie', minHours: 1, maxHours: 2 }, 'Bio': { name: 'Biologie', minHours: 1, maxHours: 2 },
-                'Ges': { name: 'Geschichte', minHours: 1, maxHours: 2 }, 'Soz': { name: 'Sozialkunde', minHours: 1, maxHours: 1 },
-                'Rel': { name: 'Religion/Philo', minHours: 1, maxHours: 1 }
+                'De': { name: 'Deutsch', canBeOneHour: false }, 
+                'Ma': { name: 'Mathematik', canBeOneHour: false }, 
+                'En': { name: 'Englisch', canBeOneHour: false },
+                'Bio': { name: 'Biologie', canBeOneHour: true }, // Can be 1-hour
+                'Ch': { name: 'Chemie', canBeOneHour: true },    // Can be 1-hour
+                'Sk': { name: 'Sozialkunde', canBeOneHour: true }, // Can be 1-hour
+                'Ge': { name: 'Geschichte', canBeOneHour: false }, 
+                'Phil': { name: 'Philosophie', canBeOneHour: true }, // Can be 1-hour
+                'Ph': { name: 'Physik', canBeOneHour: false },
+                'Span': { name: 'Spanisch', canBeOneHour: false }, 
+                'Fr': { name: 'Französisch', canBeOneHour: false }
             };
             const days = [ {key: 'Mo'}, {key: 'Di'}, {key: 'Mi'}, {key: 'Do'}, {key: 'Fr'} ];
-            const bigBlocks = ['01', '02', '03'];
-            const smallBlocks = [ {key: '1', parts: ['a', 'b']}, {key: '2', parts: ['a', 'b']}, {key: '3', parts: ['a', 'b']} ];
+            const bigBlocks = ['01', '02', '03']; // For 90-minute courses (2 Stunden)
+            const smallBlocks = [ {key: '1', parts: ['a', 'b']}, {key: '2', parts: ['a', 'b']}, {key: '3', parts: ['a', 'b']} ]; // For 45-minute courses (1 Stunde)
 
             // --- DOM ELEMENTS ---
             const teacherList = document.getElementById('teacher-list');
@@ -127,21 +145,22 @@
             const generateCsvBtn = document.getElementById('generate-csv-btn');
             const statusMessage = document.getElementById('statusMessage');
             const modal = document.getElementById('subject-modal');
+            const modalKuerzelInput = document.getElementById('modal-kuerzel-input');
+            const modalKuerzelError = document.getElementById('modal-kuerzel-error');
             const modalSubjectList = document.getElementById('modal-subject-list');
+            const modalSubjectsError = document.getElementById('modal-subjects-error');
             const modalSaveBtn = document.getElementById('modal-save-btn');
             const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
-            let activeTeacherCard = null;
-
             // --- FUNCTIONS ---
-            const openModal = (teacherCard) => {
-                activeTeacherCard = teacherCard;
-                const selectedSubjectsInput = activeTeacherCard.querySelector('.selected-subjects-input');
-                const currentSelection = selectedSubjectsInput.value ? selectedSubjectsInput.value.split(',') : [];
+            const openModal = () => {
+                // Reset modal inputs and errors
+                modalKuerzelInput.value = '';
+                modalKuerzelError.classList.add('hidden');
+                modalSubjectsError.classList.add('hidden');
                 
                 modalSubjectList.innerHTML = ''; // Clear previous content
                 for (const [acronym, subject] of Object.entries(subjects)) {
-                    const isChecked = currentSelection.includes(acronym);
                     const div = document.createElement('div');
                     div.className = 'flex items-center';
                     const input = document.createElement('input');
@@ -149,7 +168,6 @@
                     input.id = `modal-subject-${acronym}`;
                     input.value = acronym;
                     input.className = 'subject-checkbox';
-                    input.checked = isChecked;
                     
                     const label = document.createElement('label');
                     label.htmlFor = input.id;
@@ -164,6 +182,7 @@
                 modal.classList.remove('modal-hidden');
                 setTimeout(() => {
                     modal.classList.add('opacity-100');
+                    modalKuerzelInput.focus(); // Focus on kuerzel input
                 }, 10);
             };
 
@@ -171,19 +190,34 @@
                 modal.classList.remove('opacity-100');
                 setTimeout(() => {
                     modal.classList.add('modal-hidden');
-                    activeTeacherCard = null;
                 }, 300);
             };
 
-            const addTeacherRow = () => {
+            const createTeacherDisplayCard = (kuerzel, selectedAcronyms) => {
                 const newTeacherRow = teacherTemplate.content.cloneNode(true);
                 const card = newTeacherRow.querySelector('.teacher-card');
                 
-                newTeacherRow.querySelector('.open-modal-btn').addEventListener('click', () => openModal(card));
-                newTeacherRow.querySelector('.remove-teacher-btn').addEventListener('click', (e) => e.target.closest('.teacher-card').remove());
+                card.querySelector('.kuerzel-input').value = kuerzel;
+                card.querySelector('.selected-subjects-input').value = selectedAcronyms.join(',');
+                
+                const displayDiv = card.querySelector('.selected-subjects-display');
+                if (selectedAcronyms.length > 0) {
+                    displayDiv.innerHTML = '';
+                    selectedAcronyms.forEach(acronym => {
+                        const badge = document.createElement('span');
+                        badge.className = 'inline-block bg-blue-100 text-blue-800 text-sm font-semibold mr-2 mb-2 px-2.5 py-0.5 rounded-full';
+                        badge.textContent = acronym;
+                        displayDiv.appendChild(badge);
+                    });
+                } else {
+                    displayDiv.innerHTML = '<span class="text-slate-500">Keine Fächer ausgewählt</span>';
+                }
 
+                card.querySelector('.remove-teacher-btn').addEventListener('click', (e) => e.target.closest('.teacher-card').remove());
+                
                 teacherList.appendChild(newTeacherRow);
             };
+
 
             const generateAllLessonUnits = () => {
                 const allUnits = [];
@@ -195,30 +229,31 @@
                     const kuerzel = kuerzelInput.value.trim().toUpperCase();
                     
                     if (kuerzel.length !== 3) {
-                        kuerzelInput.classList.add('border-red-500', 'focus:ring-red-500');
+                        // Error should ideally be caught by modal validation, but kept as fallback
                         statusMessage.textContent = `Fehler: Kürzel in Zeile ${index + 1} muss genau 3 Buchstaben haben.`;
                         hasError = true; return;
-                    } else {
-                        kuerzelInput.classList.remove('border-red-500', 'focus:ring-red-500');
-                    }
+                    } 
 
                     const selectedSubjects = row.querySelector('.selected-subjects-input').value.split(',').filter(s => s);
                     if (selectedSubjects.length === 0) {
+                        // Error should ideally be caught by modal validation, but kept as fallback
                         statusMessage.textContent = `Fehler: Für Kürzel "${kuerzel}" wurden keine Fächer ausgewählt.`;
                         hasError = true; return;
                     }
 
                     selectedSubjects.forEach(subjectAcronym => {
                         const subjectData = subjects[subjectAcronym];
-                        if (subjectData.maxHours >= 2) {
-                            days.forEach(day => bigBlocks.forEach(block => {
-                                const kurzbezeichnung = `${kuerzel}${day.key}${block}-${subjectAcronym}`;
-                                allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 2));
-                            }));
-                        }
-                        if (subjectData.minHours === 1) {
+
+                        // Generate 90-minute courses (2 Stunden) for all selected subjects
+                        days.forEach(day => bigBlocks.forEach(block => {
+                            const kurzbezeichnung = `${kuerzel}${day.key}${block}${subjectAcronym}`;
+                            allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 2));
+                        }));
+                        
+                        // Generate 45-minute courses (1 Stunde) ONLY if subject can be 1-hour
+                        if (subjectData.canBeOneHour) {
                             days.forEach(day => smallBlocks.forEach(block => block.parts.forEach(part => {
-                                const kurzbezeichnung = `${kuerzel}${day.key}${block.key}${part}-${subjectAcronym}`;
+                                const kurzbezeichnung = `${kuerzel}${day.key}${block.key}${part}${subjectAcronym}`;
                                 allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 1));
                             })));
                         }
@@ -235,20 +270,39 @@
 
             const createUnit = (kurzbezeichnung, subjectAcronym, stunden) => {
                 return {
-                    "Freitext": kurzbezeichnung, "Fach": subjectAcronym, "Facherweiterung": "x",
-                    "Bilingual": "Nein", "Einzelunterricht": "Nein", "Stunden": stunden,
-                    "Dauer": stunden === 2 ? 90 : 45,
-                    "Schulart": "Gymnasium,Regionale Schule", "Jahrgangsstufen": "7,8,9,10,11,12",
-                    "Unterrichtsarten": "Pfl.", "ESF-Ergänzungsstd.": "x", "ESF-Teilungsstd.": "x"
+                    "Fach": subjectAcronym, // Fachkürzel des Faches
+                    "Facherweiterung": 0, // Immer 0
+                    "Bilingual": 0, // Immer 0
+                    "Einzelunterricht": 0, // Immer 0
+                    "Stunden": stunden, // 2 für 90min Blöcke, 1 für 45min Blöcke
+                    "Dauer": 45, // Immer 45 Minuten
+                    "Freitext": kurzbezeichnung, // Der generierte Titel des Kurses
+                    "Schulart": "Gy,RegS", // Abkürzungen
+                    "Jahrgangsstufen": "7,8,9,10,11,12", // Feste Werte
+                    "Unterrichtsarten": "Pfl", // Abkürzung
+                    "ESF-Ergänzungsstd.": 0, // Immer 0
+                    "ESF-Teilungsstd.": 0 // Immer 0
                 };
             };
 
             const convertToCsv = (data) => {
                 if (data.length === 0) return '';
-                const headers = ["Fach", "Facherweiterung", "Bilingual", "Einzelunterricht", "Stunden", "Dauer", "Freitext", "Schulart", "Jahrgangsstufen", "Unterrichtsarten", "ESF-Ergänzungsstd.", "ESF-Teilungsstd."];
+                // Define the exact order of headers as per feedback
+                const headers = [
+                    "Fach", "Facherweiterung", "Bilingual", "Einzelunterricht", "Stunden", 
+                    "Dauer", "Freitext", "Schulart", "Jahrgangsstufen", "Unterrichtsarten", 
+                    "ESF-Ergänzungsstd.", "ESF-Teilungsstd."
+                ];
                 const headerRow = headers.join(';');
                 const rows = data.map(row => headers.map(header => {
-                    let value = String(row[header] || '');
+                    let value = row[header];
+                    // Explicitly convert 0 to string "0"
+                    if (value === 0) {
+                        value = "0";
+                    } else {
+                        value = String(value || ''); // Convert null/undefined to empty string
+                    }
+                    
                     if (value.includes(';') || value.includes('\n') || value.includes('"')) {
                         value = `"${value.replace(/"/g, '""')}"`;
                     }
@@ -267,32 +321,42 @@
             };
 
             // --- EVENT LISTENERS ---
-            addTeacherBtn.addEventListener('click', addTeacherRow);
-            
+            addTeacherBtn.addEventListener('click', openModal); // Open modal directly
+
             modalSaveBtn.addEventListener('click', () => {
-                if (!activeTeacherCard) return;
+                const kuerzel = modalKuerzelInput.value.trim().toUpperCase();
                 const selectedCheckboxes = Array.from(modalSubjectList.querySelectorAll('.subject-checkbox:checked'));
                 const selectedAcronyms = selectedCheckboxes.map(cb => cb.value);
                 
-                activeTeacherCard.querySelector('.selected-subjects-input').value = selectedAcronyms.join(',');
-                
-                const displayDiv = activeTeacherCard.querySelector('.selected-subjects-display');
-                if (selectedAcronyms.length > 0) {
-                    displayDiv.innerHTML = '';
-                    selectedAcronyms.forEach(acronym => {
-                        const badge = document.createElement('span');
-                        badge.className = 'inline-block bg-blue-100 text-blue-800 text-sm font-semibold mr-2 mb-2 px-2.5 py-0.5 rounded-full';
-                        badge.textContent = acronym;
-                        displayDiv.appendChild(badge);
-                    });
+                let isValid = true;
+
+                // Validate Kürzel
+                if (kuerzel.length !== 3) {
+                    modalKuerzelError.classList.remove('hidden');
+                    isValid = false;
                 } else {
-                    displayDiv.innerHTML = '<span class="text-slate-500">Keine Fächer ausgewählt</span>';
+                    modalKuerzelError.classList.add('hidden');
                 }
-                closeModal();
+
+                // Validate Subjects
+                if (selectedAcronyms.length === 0) {
+                    modalSubjectsError.classList.remove('hidden');
+                    isValid = false;
+                } else {
+                    modalSubjectsError.classList.add('hidden');
+                }
+
+                if (isValid) {
+                    createTeacherDisplayCard(kuerzel, selectedAcronyms);
+                    closeModal();
+                }
             });
 
             modalCancelBtn.addEventListener('click', closeModal);
-            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            modal.addEventListener('click', (e) => { 
+                // Close modal only if clicking on the backdrop, not inside the content
+                if (e.target === modal) closeModal(); 
+            });
 
             generateCsvBtn.addEventListener('click', () => {
                 statusMessage.classList.add('hidden'); statusMessage.textContent = '';
@@ -318,7 +382,7 @@
             });
 
             // --- INITIALIZATION ---
-            addTeacherRow();
+            // No initial teacher row added automatically, user clicks to add
         });
     </script>
 </body>
