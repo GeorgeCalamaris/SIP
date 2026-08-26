@@ -202,24 +202,24 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Map of subject names to their abbreviations
+            // Map of subject names to their column-1 abbreviations and code suffixes
             const subjects = {
-                'De':   { name: 'Deutsch' }, 
-                'Ma':   { name: 'Mathematik' }, 
-                'En':   { name: 'Englisch' },
-                'Bio':  { name: 'Biologie' }, 
-                'Ch':   { name: 'Chemie' }, 
-                'Sk':   { name: 'Sozialkunde' }, 
-                'Ge':   { name: 'Geschichte' }, 
-                'PS':   { name: 'Philosophie' }, 
-                'Ph':   { name: 'Physik' },
-                'Span': { name: 'Spanisch' }, 
-                'Fr':   { name: 'Französisch' },
-                'DZ':   { name: 'Deutsch als Zweitsprache' },
-                'GG':   { name: 'Geografie' },
-                'RE':   { name: 'Religion' },
-                'MU':   { name: 'Musik' },
-                'IN':   { name: 'Informatik' }
+                'De':   { name: 'Deutsch', codeSuffix: 'De' }, 
+                'Ma':   { name: 'Mathematik', codeSuffix: 'Ma' }, 
+                'En':   { name: 'Englisch', codeSuffix: 'En' },
+                'Bio':  { name: 'Biologie', codeSuffix: 'Bi' }, 
+                'Ch':   { name: 'Chemie', codeSuffix: 'Ch' }, 
+                'Sk':   { name: 'Sozialkunde', codeSuffix: 'Sk' }, 
+                'Ge':   { name: 'Geschichte', codeSuffix: 'Ge' }, 
+                'Phil': { name: 'Philosophie', codeSuffix: 'Ph' }, 
+                'Ph':   { name: 'Physik', codeSuffix: 'Ph' },
+                'Span': { name: 'Spanisch', codeSuffix: 'Sp' }, 
+                'Fr':   { name: 'Französisch', codeSuffix: 'Fr' },
+                'DaF':  { name: 'Deutsch als Zweitsprache / DaF', codeSuffix: 'Dz' },
+                'Geo':  { name: 'Geografie', codeSuffix: 'Gg' },
+                'eRe':  { name: 'Religion', codeSuffix: 'Re' },
+                'Mu':   { name: 'Musik', codeSuffix: 'Mu' },
+                'Inf':  { name: 'Informatik', codeSuffix: 'In' }
             };
 
             const days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
@@ -252,23 +252,14 @@
             const modalDeselectAll = document.getElementById('modal-deselect-all');
 
             /**
-             * Formats subject code to 2 characters (e.g. Deutsch -> De, Biologie -> Bi)
-             */
-            const getSubjectKuerzel = (subjectName) => {
-                if (!subjectName) return 'Xx';
-                const sc = String(subjectName).substring(0, 2);
-                return sc.charAt(0).toUpperCase() + sc.charAt(1).toLowerCase();
-            };
-
-            /**
              * Generates a single SIP code string according to the given specifications
              * @param {string} teacherId 3-letter teacher code
              * @param {string} dayFull Full day name (e.g. 'Montag' or 'Mo')
              * @param {string} startTime Slot code (e.g. '01', '1a') or time string
-             * @param {string} subjectName Subject name or acronym
+             * @param {string} codeSuffix Suffix for the subject code (e.g. 'Bi', 'Ph', 'Dz')
              * @param {string} weekSuffix Empty string '', 'A', or 'B'
              */
-            const generateSipCode = (teacherId, dayFull, startTime, subjectName, weekSuffix = '') => {
+            const generateSipCode = (teacherId, dayFull, startTime, codeSuffix, weekSuffix = '') => {
                 let tKuerzel = teacherId ? String(teacherId).substring(0, 3).toUpperCase() : 'XXX';
                 
                 const dayMap = {
@@ -311,9 +302,9 @@
                     tSlot = String(startTime);
                 }
 
-                let sKuerzel = getSubjectKuerzel(subjectName);
+                let sKuerzel = codeSuffix || 'Xx';
                 
-                // Freitext pattern: Kürzel (3) + Tag (2) + Slot (2) + [Wochenlogik A/B] + Fach (2)
+                // Freitext pattern: Kürzel (3) + Tag (2) + Slot (2) + [Wochenlogik A/B] + Fach-Suffix (2)
                 return `${tKuerzel}${dKuerzel}${tSlot}${weekSuffix}${sKuerzel}`;
             };
 
@@ -440,11 +431,14 @@
                     const weekVariants = ['', 'A', 'B'];
 
                     selectedSubjects.forEach(subjectAcronym => {
+                        // Obtain code suffix for Freitext (e.g. 'Bi' for 'Bio', 'Dz' for 'DaF')
+                        const codeSuffix = subjects[subjectAcronym] ? subjects[subjectAcronym].codeSuffix : subjectAcronym;
+
                         // 1. Generate 90-minute courses (2 Stunden) for 01, 02, 03, 04 across all days
                         days.forEach(dayName => {
                             bigBlocks.forEach(slotCode => {
                                 weekVariants.forEach(wVariant => {
-                                    const kurzbezeichnung = generateSipCode(kuerzel, dayName, slotCode, subjectAcronym, wVariant);
+                                    const kurzbezeichnung = generateSipCode(kuerzel, dayName, slotCode, codeSuffix, wVariant);
                                     allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 2));
                                 });
                             });
@@ -454,7 +448,7 @@
                         days.forEach(dayName => {
                             smallBlocks.forEach(slotCode => {
                                 weekVariants.forEach(wVariant => {
-                                    const kurzbezeichnung = generateSipCode(kuerzel, dayName, slotCode, subjectAcronym, wVariant);
+                                    const kurzbezeichnung = generateSipCode(kuerzel, dayName, slotCode, codeSuffix, wVariant);
                                     allUnits.push(createUnit(kurzbezeichnung, subjectAcronym, 1));
                                 });
                             });
