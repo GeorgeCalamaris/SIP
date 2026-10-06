@@ -6,7 +6,7 @@
     <title>Erweiterter Kurs-Generator für SIP (inkl. A/B-Wochen)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
+    <style type="text/tailwindcss">
         body {
             font-family: "Inter", system-ui, -apple-system, sans-serif;
             background-color: #f8fafc;
@@ -165,17 +165,16 @@
         </div>
     </template>
 
-    <!-- Modal for Subject Selection and Kuerzel Input -->
     <div id="subject-modal" class="modal-backdrop">
         <div class="modal-content">
             <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center space-x-2">
-                <span>Lehrkraft hinzufügen & Fächer auswählen</span>
+                <span>Lehrkraft hinzufügen &amp; Fächer auswählen</span>
             </h2>
             
             <div class="mb-5">
                 <label for="modal-kuerzel-input" class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-1.5">Kürzel der Lehrkraft (genau 3 Buchstaben):</label>
                 <input type="text" id="modal-kuerzel-input" class="form-input font-mono uppercase font-semibold text-lg tracking-widest" placeholder="z.B. HAK" maxlength="3">
-                <p id="modal-kuerzel-error" class="error-message hidden">Das Kürzel muss genau 3 Buchstaben haben.</p>
+                <p id="modal-kuerzel-error" class="error-message hidden">Das Kürzel muss genau 3 Buchstaben haben (A-Z).</p>
             </div>
 
             <div class="mb-6">
@@ -188,7 +187,7 @@
                     </div>
                 </div>
                 <div id="modal-subject-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl">
-                    <!-- Checkboxes will be populated by JS -->
+                    <!-- Checkboxes populated by JS -->
                 </div>
                 <p id="modal-subjects-error" class="error-message hidden">Bitte wählen Sie mindestens ein Fach aus.</p>
             </div>
@@ -203,6 +202,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // Map of subject names to their column-1 abbreviations and code suffixes
+            // Note: Missing comma after 'Inf' has been resolved
             const subjects = {
                 'De':   { name: 'Deutsch', codeSuffix: 'De' }, 
                 'Ma':   { name: 'Mathematik', codeSuffix: 'Ma' }, 
@@ -219,16 +219,16 @@
                 'Geo':  { name: 'Geografie', codeSuffix: 'Gg' },
                 'eRe':  { name: 'Religion', codeSuffix: 'Re' },
                 'Mu':   { name: 'Musik', codeSuffix: 'Mu' },
-                'Inf':  { name: 'Informatik', codeSuffix: 'In' }
+                'Inf':  { name: 'Informatik', codeSuffix: 'In' },
                 'Bau':  { name: 'Bautechnik', codeSuffix: 'Ba' }
             };
 
             const days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
 
-            // 90-minute course slot codes (2 Stunden) per new spec (01, 02, 03, 04)
+            // 90-minute course slot codes (2 Stunden) per spec (01, 02, 03, 04)
             const bigBlocks = ['01', '02', '03', '04']; 
 
-            // 45-minute course slot codes (1 Stunde) per new spec (1a, 1b, 2a, 2b, 3a, 3b, 4a, 4b)
+            // 45-minute course slot codes (1 Stunde) per spec (1a, 1b, 2a, 2b, 3a, 3b, 4a, 4b)
             const smallBlocks = ['1a', '1b', '2a', '2b', '3a', '3b', '4a', '4b'];
 
             // --- DOM ELEMENTS ---
@@ -253,12 +253,7 @@
             const modalDeselectAll = document.getElementById('modal-deselect-all');
 
             /**
-             * Generates a single SIP code string according to the given specifications
-             * @param {string} teacherId 3-letter teacher code
-             * @param {string} dayFull Full day name (e.g. 'Montag' or 'Mo')
-             * @param {string} startTime Slot code (e.g. '01', '1a') or time string
-             * @param {string} codeSuffix Suffix for the subject code (e.g. 'Bi', 'Ph', 'Dz')
-             * @param {string} weekSuffix Empty string '', 'A', or 'B'
+             * Generates a single SIP code string according to the specifications
              */
             const generateSipCode = (teacherId, dayFull, startTime, codeSuffix, weekSuffix = '') => {
                 let tKuerzel = teacherId ? String(teacherId).substring(0, 3).toUpperCase() : 'XXX';
@@ -272,7 +267,7 @@
 
                 let tSlot = '00';
 
-                // Check if startTime is a time string e.g. "08:00" or direct slot code e.g. "01" / "1a"
+                // Check if startTime is a time string e.g. "08:00" or direct slot code
                 if (typeof startTime === 'string' && startTime.includes(':')) {
                     const getMinutes = (tStr) => {
                         const parts = tStr.split(':');
@@ -280,7 +275,7 @@
                     };
                     const startMin = getMinutes(startTime);
                     const startH = parseInt(startTime.split(':')[0], 10);
-                    const duration = 90; // Default assumption for time lookup
+                    const duration = 90;
 
                     if (duration > 60) {
                         const MAPPING_90 = [
@@ -400,8 +395,11 @@
                 infoBadge.textContent = `${selectedAcronyms.length} Fächer gewählt`;
 
                 card.querySelector('.remove-teacher-btn').addEventListener('click', (e) => {
-                    e.target.closest('.teacher-card').remove();
-                    updateSummaryCounter();
+                    const teacherCard = e.currentTarget.closest('.teacher-card');
+                    if (teacherCard) {
+                        teacherCard.remove();
+                        updateSummaryCounter();
+                    }
                 });
                 
                 teacherList.appendChild(newTeacherRow);
@@ -422,7 +420,7 @@
                         hasError = true; return;
                     } 
 
-                    const selectedSubjects = row.querySelector('.selected-subjects-input').value.split(',').filter(s => s);
+                    const selectedSubjects = row.querySelector('.selected-subjects-input').value.split(',').filter(Boolean);
                     if (selectedSubjects.length === 0) {
                         statusMessage.textContent = `Fehler: Für Kürzel "${kuerzel}" wurden keine Fächer ausgewählt.`;
                         hasError = true; return;
@@ -432,7 +430,6 @@
                     const weekVariants = ['', 'A', 'B'];
 
                     selectedSubjects.forEach(subjectAcronym => {
-                        // Obtain code suffix for Freitext (e.g. 'Bi' for 'Bio', 'Dz' for 'DaF')
                         const codeSuffix = subjects[subjectAcronym] ? subjects[subjectAcronym].codeSuffix : subjectAcronym;
 
                         // 1. Generate 90-minute courses (2 Stunden) for 01, 02, 03, 04 across all days
@@ -445,7 +442,7 @@
                             });
                         });
                         
-                        // 2. Generate 45-minute courses (1 Stunde) for 1a-4b across all days (for ALL subjects)
+                        // 2. Generate 45-minute courses (1 Stunde) for 1a-4b across all days
                         days.forEach(dayName => {
                             smallBlocks.forEach(slotCode => {
                                 weekVariants.forEach(wVariant => {
@@ -467,18 +464,18 @@
 
             const createUnit = (kurzbezeichnung, subjectAcronym, stunden) => {
                 return {
-                    "Fach": subjectAcronym,              // Fachkürzel des Faches (z.B. De, Bio)
-                    "Facherweiterung": 0,                // Immer 0
-                    "Bilingual": 0,                      // Immer 0
-                    "Einzelunterricht": 0,               // Immer 0
-                    "Stunden": stunden,                  // 2 für 90min Blöcke, 1 für 45min Blöcke
-                    "Dauer": 45,                         // Immer 45 Minuten
-                    "Freitext": kurzbezeichnung,         // Der generierte SIP-Code
-                    "Schulart": "Gy,RegS",              // Abkürzungen
-                    "Jahrgangsstufen": "7,8,9,10,11,12",// Feste Werte
-                    "Unterrichtsarten": "Pfl",            // Abkürzung
-                    "ESF-Ergänzungsstd.": 0,            // Immer 0
-                    "ESF-Teilungsstd.": 0               // Immer 0
+                    "Fach": subjectAcronym,
+                    "Facherweiterung": 0,
+                    "Bilingual": 0,
+                    "Einzelunterricht": 0,
+                    "Stunden": stunden,
+                    "Dauer": 45,
+                    "Freitext": kurzbezeichnung,
+                    "Schulart": "Gy,RegS",
+                    "Jahrgangsstufen": "7,8,9,10,11,12",
+                    "Unterrichtsarten": "Pfl",
+                    "ESF-Ergänzungsstd.": 0,
+                    "ESF-Teilungsstd.": 0
                 };
             };
 
@@ -507,7 +504,6 @@
             };
 
             const downloadFile = (filename, content) => {
-                // Add UTF-8 BOM byte sequence so Excel correctly displays German special chars
                 const blob = new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -519,7 +515,7 @@
                 URL.revokeObjectURL(url);
             };
 
-            // Modal events
+            // --- EVENT LISTENERS ---
             addTeacherBtn.addEventListener('click', openModal);
 
             modalSelectAll.addEventListener('click', () => {
@@ -562,12 +558,20 @@
                 if (e.target === modal) closeModal(); 
             });
 
+            // Allow closing modal with Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.classList.contains('active')) {
+                    closeModal();
+                }
+            });
+
             // Generate CSV button click listener
             generateCsvBtn.addEventListener('click', () => {
                 statusMessage.classList.add('hidden'); 
                 statusMessage.textContent = '';
 
-                if (teacherList.children.length === 0) {
+                const teacherCards = teacherList.querySelectorAll('.teacher-card');
+                if (teacherCards.length === 0) {
                     statusMessage.textContent = 'Bitte fügen Sie mindestens eine Lehrkraft hinzu.';
                     statusMessage.classList.remove('hidden', 'bg-green-100', 'text-green-800');
                     statusMessage.classList.add('bg-red-100', 'text-red-800');
